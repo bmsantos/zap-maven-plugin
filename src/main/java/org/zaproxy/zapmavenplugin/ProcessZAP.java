@@ -14,51 +14,56 @@ package org.zaproxy.zapmavenplugin;
  */
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.net.URL;
-import java.util.Calendar;
-import java.util.List;
-import java.util.UUID;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.UUID;
 
-import net.sf.json.JSON;
-import net.sf.json.JSONSerializer;
-import net.sf.json.xml.XMLSerializer;
-
-import org.apache.maven.plugin.AbstractMojo;
-import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
-import org.zaproxy.clientapi.core.*;
+import org.apache.maven.plugin.AbstractMojo;
+import org.apache.maven.plugin.MojoExecutionException;
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
+import org.zaproxy.clientapi.core.ApiResponse;
+import org.zaproxy.clientapi.core.ApiResponseElement;
+import org.zaproxy.clientapi.core.ClientApi;
+import org.zaproxy.clientapi.core.ClientApiException;
 
 /**
  * Goal which touches a timestamp file.
  */
-@Mojo( name = "process-zap", 
-       defaultPhase = LifecyclePhase.POST_INTEGRATION_TEST, 
-       threadSafe = true )
+@Mojo( name = "process-zap",
+defaultPhase = LifecyclePhase.POST_INTEGRATION_TEST,
+threadSafe = true )
 public class ProcessZAP extends AbstractMojo {
 
     private ClientApi zapClientAPI;
     private Proxy proxy;
 
     /**
+     * API KEY.
+     */
+    @Parameter(defaultValue = "ZAP-MAVEN-PLUGIN")
+    public String apiKey;
+
+    /**
      * Location of the host of the ZAP proxy
      */
-    @Parameter( defaultValue = "localhost", 
-    		    required = true)
+    @Parameter( defaultValue = "localhost",
+            required = true)
     private String zapProxyHost;
 
     /**
      * Location of the port of the ZAP proxy
      */
-    @Parameter( defaultValue = "8080", 
-		        required = true)
+    @Parameter( defaultValue = "8080",
+            required = true)
     private int zapProxyPort;
 
     /**
@@ -115,8 +120,8 @@ public class ProcessZAP extends AbstractMojo {
      * @return
      */
     private String dateTimeString() {
-        Calendar cal = Calendar.getInstance();
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
+        final Calendar cal = Calendar.getInstance();
+        final SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMddHHmmss");
         return sdf.format(cal.getTime());
     }
 
@@ -129,20 +134,22 @@ public class ProcessZAP extends AbstractMojo {
      *            if null, then default ".tmp"
      * @return
      */
-    private String createTempFilename(String prefix, String suffix) {
-        StringBuilder sb = new StringBuilder("");
-        if (prefix != null)
+    private String createTempFilename(final String prefix, final String suffix) {
+        final StringBuilder sb = new StringBuilder("");
+        if (prefix != null) {
             sb.append(prefix);
-        else
+        } else {
             sb.append("temp");
+        }
 
-        // append date time and random UUID 
+        // append date time and random UUID
         sb.append(dateTimeString()).append("_").append(UUID.randomUUID().toString());
 
-        if (suffix != null)
+        if (suffix != null) {
             sb.append(suffix);
-        else
+        } else {
             sb.append(".tmp");
+        }
 
         return sb.toString();
     }
@@ -153,7 +160,7 @@ public class ProcessZAP extends AbstractMojo {
      * @param response the ZAP APIresponse code
      * @return
      */
-    private int statusToInt(ApiResponse response) {
+    private int statusToInt(final ApiResponse response) {
         return Integer.parseInt(((ApiResponseElement)response).getValue());
     }
 
@@ -163,13 +170,13 @@ public class ProcessZAP extends AbstractMojo {
      * @param url the to investigate URL
      * @throws ClientApiException
      */
-    private void spiderURL(String url) throws ClientApiException {
-        zapClientAPI.spider.scan(url);
+    private void spiderURL(final String url) throws ClientApiException {
+        zapClientAPI.spider.scan(apiKey, url);
 
-        while ( statusToInt(zapClientAPI.spider.status()) < 100) {
+        while (statusToInt(zapClientAPI.spider.status(null)) < 100) {
             try {
                 Thread.sleep(1000);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 getLog().error(e.toString());
             }
         }
@@ -181,13 +188,13 @@ public class ProcessZAP extends AbstractMojo {
      * @param url the url to scan
      * @throws ClientApiException
      */
-    private void scanURL(String url) throws ClientApiException {
-        zapClientAPI.ascan.scan(url, "true", "false");
+    private void scanURL(final String url) throws ClientApiException {
+        zapClientAPI.ascan.scan(apiKey, url, "true", "false");
 
         while ( statusToInt(zapClientAPI.ascan.status()) < 100) {
             try {
                 Thread.sleep(1000);
-            } catch (InterruptedException e) {
+            } catch (final InterruptedException e) {
                 getLog().error(e.toString());
             }
         }
@@ -200,13 +207,13 @@ public class ProcessZAP extends AbstractMojo {
      * @return  all alerts from ZAProxy
      * @throws Exception
      */
-    private String getAllAlerts(String format) throws Exception {
+    private String getAllAlerts(final String format) throws Exception {
         URL url;
         String result = "";
 
-        if (format.equalsIgnoreCase("xml") || 
-        	format.equalsIgnoreCase("html") ||
-        	format.equalsIgnoreCase("json")) {
+        if (format.equalsIgnoreCase("xml") ||
+                format.equalsIgnoreCase("html") ||
+                format.equalsIgnoreCase("json")) {
             url = new URL("http://zap/" + format + "/core/view/alerts");
         } else {
             url = new URL("http://zap/xml/core/view/alerts");
@@ -214,10 +221,10 @@ public class ProcessZAP extends AbstractMojo {
 
         getLog().info("Open URL: " + url.toString());
 
-        HttpURLConnection uc = (HttpURLConnection) url.openConnection(proxy);
+        final HttpURLConnection uc = (HttpURLConnection) url.openConnection(proxy);
         uc.connect();
 
-        BufferedReader in = new BufferedReader(new InputStreamReader(
+        final BufferedReader in = new BufferedReader(new InputStreamReader(
                 uc.getInputStream()));
         String inputLine;
 
@@ -229,7 +236,7 @@ public class ProcessZAP extends AbstractMojo {
         return result;
 
     }
-    
+
     /**
      * Get all alerts from ZAP proxy
      *
@@ -237,16 +244,16 @@ public class ProcessZAP extends AbstractMojo {
      * @return  all alerts from ZAProxy
      * @throws Exception
      */
-    private String getAllAlertsFormat(String format) throws Exception {
+    private String getAllAlertsFormat(final String format) throws Exception {
 
-    	if (format.equalsIgnoreCase("xml") || 
-        	format.equalsIgnoreCase("html") ||
-        	format.equalsIgnoreCase("json")) {
+        if (format.equalsIgnoreCase("xml") ||
+                format.equalsIgnoreCase("html") ||
+                format.equalsIgnoreCase("json")) {
             return format;
         } else {
             return "xml";
         }
-    	
+
     }
 
     /**
@@ -254,6 +261,7 @@ public class ProcessZAP extends AbstractMojo {
      *
      * @throws MojoExecutionException
      */
+    @Override
     public void execute() throws MojoExecutionException {
 
         try {
@@ -281,7 +289,7 @@ public class ProcessZAP extends AbstractMojo {
 
                 fileName = createTempFilename("ZAP", "");
 
-                zapClientAPI.core.saveSession(fileName, "true");
+                zapClientAPI.core.saveSession(apiKey, fileName, "true");
             } else {
                 getLog().info("skip saveSession");
             }
@@ -289,32 +297,33 @@ public class ProcessZAP extends AbstractMojo {
             if (reportAlerts) {
 
                 // reuse fileName of the session file
-                if ((fileName == null) || (fileName.length() == 0))
+                if (fileName == null || fileName.length() == 0) {
                     fileName = createTempFilename("ZAP", "");
+                }
 
-                String fileName_no_extension = FilenameUtils.concat(reportsDirectory, fileName);
+                final String fileName_no_extension = FilenameUtils.concat(reportsDirectory, fileName);
 
                 try {
-                    String alerts = getAllAlerts(getAllAlertsFormat(format));
-                    String fullFileName = fileName_no_extension + "." + getAllAlertsFormat(format);
+                    final String alerts = getAllAlerts(getAllAlertsFormat(format));
+                    final String fullFileName = fileName_no_extension + "." + getAllAlertsFormat(format);
                     FileUtils.writeStringToFile(new File(fullFileName), alerts);
-                    
+
                     getLog().info("File save in format in ["+getAllAlertsFormat(format)+"]");
-                } catch (Exception e) {
+                } catch (final Exception e) {
                     getLog().error(e.toString());
                     e.printStackTrace();
                 }
             }
 
-        } catch (Exception e) {
+        } catch (final Exception e) {
             getLog().error(e.toString());
             throw new MojoExecutionException("Processing with ZAP failed");
         } finally {
-            if (shutdownZAP && (zapClientAPI != null)) {
+            if (shutdownZAP && zapClientAPI != null) {
                 try {
                     getLog().info("Shutdown ZAProxy");
-                    zapClientAPI.core.shutdown();
-                } catch (Exception e) {
+                    zapClientAPI.core.shutdown(apiKey);
+                } catch (final Exception e) {
                     getLog().error(e.toString());
                     e.printStackTrace();
                 }

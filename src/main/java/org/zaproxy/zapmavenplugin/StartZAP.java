@@ -15,14 +15,15 @@ package org.zaproxy.zapmavenplugin;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import java.io.File;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.*;
-
+import org.apache.maven.plugins.annotations.LifecyclePhase;
+import org.apache.maven.plugins.annotations.Mojo;
+import org.apache.maven.plugins.annotations.Parameter;
 import org.zaproxy.clientapi.core.ClientApi;
 
 
@@ -30,61 +31,69 @@ import org.zaproxy.clientapi.core.ClientApi;
  * Goal which will start ZAP proxy.
  */
 @Mojo( name = "start-zap",
-       defaultPhase = LifecyclePhase.PRE_INTEGRATION_TEST,
-       threadSafe = true )
+defaultPhase = LifecyclePhase.PRE_INTEGRATION_TEST,
+threadSafe = true )
 public class StartZAP extends AbstractMojo
 {
     /**
+     * API KEY.
+     */
+    @Parameter( defaultValue = "ZAP-MAVEN-PLUGIN")
+    public String apiKey;
+
+    /**
      * Location of the ZAProxy program.
      */
-	@Parameter( required=true )
+    @Parameter( required=true )
     private String zapProgram;
-    
+
     /**
      * Location of the host of the ZAP proxy
      */
-	@Parameter( defaultValue="localhost", required=true )
+    @Parameter( defaultValue="localhost", required=true )
     private String zapProxyHost;
 
     /**
      * Location of the port of the ZAP proxy
      */
-	@Parameter( defaultValue="8080", required=true )
+    @Parameter( defaultValue="8080", required=true )
     private int zapProxyPort;
 
     /**
      * New session when you don't want to start ZAProxy.
      */
-	@Parameter( defaultValue="false" )
+    @Parameter( defaultValue="false" )
     private boolean newSession;
 
     /**
      * Sleep to wait to start ZAProxy
      */
-	@Parameter( defaultValue="4000" )
+    @Parameter( defaultValue="4000" )
     private int zapSleep;
-    
+
+    @Override
     public void execute()
-        throws MojoExecutionException
-    {
-    	try {
+            throws MojoExecutionException
+            {
+        try {
             if (newSession) {
-                ClientApi zapClient = new ClientApi(zapProxyHost, zapProxyPort);
-                File tempFile = File.createTempFile("ZAP", null);
+                final ClientApi zapClient = new ClientApi(zapProxyHost, zapProxyPort);
+                final File tempFile = File.createTempFile("ZAP", null);
                 getLog().info("Create Session with temporary file [" + tempFile.getPath() + "]");
-                zapClient.newSession(tempFile.getPath());
+                zapClient.core.newSession(apiKey, "zap-maven-plugin", tempFile.getPath());
             } else {
-                File pf = new File(zapProgram);
-                Runtime runtime = java.lang.Runtime.getRuntime();
+                final File pf = new File(zapProgram);
+                final Runtime runtime = java.lang.Runtime.getRuntime();
                 getLog().info("Start ZAProxy [" + zapProgram + "]");
                 getLog().info("Using working directory [" + pf.getParentFile().getPath() + "]");
                 final Process ps = runtime.exec(zapProgram, null, pf.getParentFile());
-                
+
                 // Consommation de la sortie standard de l'application externe dans un Thread separe
                 new Thread() {
+                    @Override
                     public void run() {
                         try {
-                            BufferedReader reader = new BufferedReader(new InputStreamReader(ps.getInputStream()));
+                            final BufferedReader reader = new BufferedReader(new InputStreamReader(ps.getInputStream()));
                             String line = "";
                             try {
                                 while((line = reader.readLine()) != null) {
@@ -94,7 +103,7 @@ public class StartZAP extends AbstractMojo
                             } finally {
                                 reader.close();
                             }
-                        } catch(Exception e) {
+                        } catch(final Exception e) {
                             e.printStackTrace();
                         }
                     }
@@ -102,9 +111,10 @@ public class StartZAP extends AbstractMojo
 
                 // Consommation de la sortie d'erreur de l'application externe dans un Thread separe
                 new Thread() {
+                    @Override
                     public void run() {
                         try {
-                            BufferedReader reader = new BufferedReader(new InputStreamReader(ps.getErrorStream()));
+                            final BufferedReader reader = new BufferedReader(new InputStreamReader(ps.getErrorStream()));
                             String line = "";
                             try {
                                 while((line = reader.readLine()) != null) {
@@ -114,18 +124,19 @@ public class StartZAP extends AbstractMojo
                             } finally {
                                 reader.close();
                             }
-                        } catch(Exception e) {
+                        } catch(final Exception e) {
                             e.printStackTrace();
                         }
                     }
-                }.start();       
-                
+                }.start();
+
             }
-            Thread.currentThread().sleep(zapSleep);
-        } catch(Exception e) {
-                e.printStackTrace();
-                throw new MojoExecutionException("Unable to start ZAP [" + zapProgram + "]");
+            Thread.currentThread();
+            Thread.sleep(zapSleep);
+        } catch(final Exception e) {
+            e.printStackTrace();
+            throw new MojoExecutionException("Unable to start ZAP [" + zapProgram + "]");
         }
 
-    }
+            }
 }
